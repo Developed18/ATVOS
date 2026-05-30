@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>ANISH TV OS - Instant Load</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg-img: url('https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1920&q=80');
+  --tile-bg: rgba(15, 23, 42, 0.9);
+  --tile-hover: rgba(30, 64, 175, 0.9);
+  --text: #f9fafb;
+  --subtext: #9ca3af;
+  --accent: #3b82f6;
+}
+body {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: #000;
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+}
+#bg-layer {
+    position: fixed; inset: 0;
+    background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), var(--bg-img);
+    background-size: cover; background-position: center;
+    z-index: -1; transition: 0.5s;
+}
+.home-screen { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 40px 60px; transition: transform 0.3s; }
+.home-screen.editing { transform: scale(0.96); filter: brightness(0.7); }
+.home-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+.time-group { text-align: right; }
+#clock { font-size: 42px; font-weight: 200; }
+#date-sub { font-size: 16px; color: var(--subtext); letter-spacing: 1px; }
+.draggable-zone { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+.widget {
+    background: var(--tile-bg); border-radius: 24px; padding: 20px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.1);
+    position: relative; transition: transform 0.2s; resize: both; overflow: auto; min-width: 280px; min-height: 160px;
+}
+.editing .widget, .editing .app-tile { cursor: move; border: 2px dashed var(--accent); }
+.weather-phone { background: linear-gradient(145deg, var(--accent), #1e3a8a); color: #fff; width: 550px; border: none !important; }
+.w-main { display: flex; justify-content: space-between; align-items: flex-start; }
+.w-temp-big { font-size: 64px; font-weight: 200; line-height: 1; }
+.w-details-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 15px; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 16px; }
+.w-item { display: flex; flex-direction: column; }
+.w-item label { font-size: 10px; opacity: 0.7; text-transform: uppercase; }
+.w-item span { font-size: 14px; font-weight: 600; }
+.movie-widget { width: 350px; }
+.slide-box { width: 100%; height: 180px; overflow: hidden; border-radius: 16px; position: relative; margin-top: 10px; background: #111; }
+#moviePoster { width: 100%; height: 100%; object-fit: cover; transition: opacity 0.4s ease; opacity: 0; }
+.movie-label { position: absolute; bottom: 0; width: 100%; background: linear-gradient(transparent, rgba(0,0,0,0.9)); padding: 15px; font-size: 14px; font-weight: 600; }
+.app-row { margin-top: auto; margin-bottom: 20px; display: flex; gap: 20px; flex-wrap: wrap; }
+.app-tile {
+    width: 150px; height: 150px; background: var(--tile-bg); border-radius: 24px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; transition: 0.2s; border: 1px solid rgba(255,255,255,0.05);
+    position: relative;
+}
+.app-tile:hover:not(.dragging) { transform: translateY(-8px); background: var(--tile-hover); }
+.app-tile img { width: 70px; height: 70px; object-fit: contain; pointer-events: none; }
+.app-tile span { margin-top: 12px; font-size: 14px; font-weight: 500; pointer-events: none; }
+.remove-btn {
+    position: absolute; top: -10px; right: -10px; background: #ff4444; color: #fff;
+    border-radius: 50%; width: 26px; height: 26px; display: none;
+    align-items: center; justify-content: center; cursor: pointer; border: 2px solid #fff; font-weight: bold; z-index: 10;
+}
+.editing .remove-btn { display: flex; }
+.edit-ui { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); display: none; gap: 15px; z-index: 100; }
+.btn { padding: 14px 28px; border-radius: 50px; border: none; font-weight: bold; cursor: pointer; color: #fff; }
+.dragging { opacity: 0.4; transform: scale(0.9); }
+.settings-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(15px); }
+.settings-modal { background: #0f172a; padding: 40px; border-radius: 32px; width: 450px; border: 1px solid rgba(255,255,255,0.1); }
+.app-store-card {
+  background:var(--tile-bg); border-radius:16px; padding:16px; text-align:center;
+  border:1px solid rgba(255,255,255,0.1); display:flex; flex-direction:column; align-items:center;
+}
+.app-store-card span.emoji { font-size:80px; margin-bottom:8px; }
+.app-store-card span.name { margin:8px 0; font-size:14px; }
+.app-store-card button {
+  margin-top:8px; padding:6px 16px; border-radius:20px; border:none;
+  background:var(--accent); color:white; font-weight:bold; cursor:pointer;
+}
+.app-store-card.installed button { background:#4caf50; }
+</style>
+</head>
+<body onmousedown="startPress()" onmouseup="endPress()" onclick="initAudio()">
+<div id="bg-layer"></div>
+<div class="home-screen" id="homeScreen">
+  <div class="home-header">
+    <h1 style="font-size:32px;">Home</h1>
+    <div class="time-group">
+        <div id="clock">--:--</div>
+        <div id="date-sub">LOADING...</div>
+    </div>
+  </div>
+  <div class="draggable-zone" id="widgetGrid">
+    <div class="widget weather-phone" id="w-weather" draggable="false">
+      <div class="remove-btn" onclick="this.parentElement.remove()">✕</div>
+      <div class="w-main">
+        <div><h2 style="font-size: 24px;">East Brunswick</h2><p id="wCond" style="opacity:0.8; font-size:15px;">Partly Cloudy</p></div>
+        <div class="w-temp-big" id="wTemp">--°</div>
+      </div>
+      <div class="w-details-grid">
+        <div class="w-item"><label>Wind</label><span id="wWind">--</span></div>
+        <div class="w-item"><label>Sunrise</label><span id="wRise">--</span></div>
+        <div class="w-item"><label>Sunset</label><span id="wSet">--</span></div>
+        <div class="w-item"><label>Humidity</label><span id="wHum">--</span></div>
+        <div class="w-item"><label>UV</label><span id="wUV">--</span></div>
+        <div class="w-item"><label>Dir</label><span id="wDir">--</span></div>
+      </div>
+    </div>
+    <div class="widget movie-widget" id="w-movies" draggable="false">
+      <div class="remove-btn" onclick="this.parentElement.remove()">✕</div>
+      <h3 style="font-size:16px;">Trending Movies</h3>
+      <div class="slide-box">
+        <img id="moviePoster" src="">
+        <div class="movie-label" id="movieTitle">Loading...</div>
+      </div>
+    </div>
+  </div>
+  <div class="app-row" id="appGrid">
+    <div class="app-tile" id="app-yt" draggable="false" onmouseover="playPulse()" onclick="window.open('https://youtube.com')">
+        <div class="remove-btn" onclick="event.stopPropagation(); this.parentElement.remove()">✕</div>
+        <img src="https://img.icons8.com/color/512/youtube-play.png"><span>YouTube</span>
+    </div>
+    <div class="app-tile" id="app-netflix" draggable="false" onmouseover="playPulse()" onclick="window.open('https://netflix.com')">
+        <div class="remove-btn" onclick="event.stopPropagation(); this.parentElement.remove()">✕</div>
+        <img src="https://assets.nflxext.com/us/ffe/siteui/common/icons/nficon2016.png"><span>Netflix</span>
+    </div>
+    <div class="app-tile" id="app-peacock" draggable="false" onmouseover="playPulse()" onclick="window.open('https://peacocktv.com')">
+        <div class="remove-btn" onclick="event.stopPropagation(); this.parentElement.remove()">✕</div>
+        <img src="https://upload.wikimedia.org/wikipedia/commons/d/d3/NBCUniversal_Peacock_Logo.svg"><span>Peacock</span>
+    </div>
+    <div class="app-tile" id="app-disney" draggable="false" onmouseover="playPulse()" onclick="window.open('https://www.disneyplus.com')">
+        <div class="remove-btn" onclick="event.stopPropagation(); this.parentElement.remove()">✕</div>
+        <img src="https://img.icons8.com/fluency/512/disney-plus.png"><span>Disney+</span>
+    </div>
+    <div class="app-tile" id="app-music" draggable="false" onmouseover="playPulse()" onclick="window.open('https://music.youtube.com')">
+        <div class="remove-btn" onclick="event.stopPropagation(); this.parentElement.remove()">✕</div>
+        <img src="https://img.icons8.com/color/512/youtube-music.png"><span>YT Music</span>
+    </div>
+    <div class="app-tile" id="app-xbox" draggable="false" onmouseover="playPulse()" onclick="window.open('https://www.xbox.com/play')">
+        <div class="remove-btn" onclick="event.stopPropagation(); this.parentElement.remove()">✕</div>
+        <img src="https://img.icons8.com/color/512/xbox.png"><span>Xbox Cloud</span>
+    </div>
+    <div class="app-tile" id="app-store" draggable="false" onmouseover="playPulse()" onclick="openAppStore()">
+        <div class="remove-btn" onclick="event.stopPropagation(); this.parentElement.remove()">✕</div>
+        <img src="https://img.icons8.com/fluency/512/google-play.png"><span>App Store</span>
+    </div>
+    <div class="app-tile" id="app-settings" draggable="false" onmouseover="playPulse()" onclick="openSettings()">
+        <img src="https://cdn-icons-png.flaticon.com/512/2099/2099058.png"><span>Settings</span>
+    </div>
+  </div>
+</div>
+<div class="edit-ui" id="editUI">
+    <button class="btn" style="background: #374151;" onclick="location.reload()">Reset All</button>
+    <button class="btn" style="background: #10b981;" onclick="closeEditor()">Save Layout</button>
+</div>
+<div class="settings-overlay" id="settingsOverlay">
+  <div class="settings-modal">
+    <h2 style="margin-bottom:20px;">Settings</h2>
+    <div style="margin-bottom:20px;">
+        <label style="color:var(--subtext); font-size:12px; display:block; margin-bottom:10px;">ACCENT COLOR</label>
+        <div style="display:flex; gap:10px;">
+            <div style="width:30px; height:30px; border-radius:50%; background:#3b82f6; cursor:pointer;" onclick="setAccent('#3b82f6')"></div>
+            <div style="width:30px; height:30px; border-radius:50%; background:#ef4444; cursor:pointer;" onclick="setAccent('#ef4444')"></div>
+            <div style="width:30px; height:30px; border-radius:50%; background:#10b981; cursor:pointer;" onclick="setAccent('#10b981')"></div>
+        </div>
+    </div>
+    <button onclick="document.getElementById('settingsOverlay').style.display='none'" style="width:100%; padding:14px; border-radius:12px; border:none; background:var(--accent); color:#fff; font-weight:bold; cursor:pointer;">Close</button>
+  </div>
+</div>
+
+<div class="settings-overlay" id="appStoreOverlay" style="display:none">
+  <div class="settings-modal" style="width:90%;max-width:900px;height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h2>App Store</h2>
+      <div class="close-btn" onclick="document.getElementById('appStoreOverlay').style.display='none'">×</div>
+    </div>
+    <div id="installedAppsRow" style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:30px"></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:20px">
+      <div class="app-store-card" data-id="hbo" data-url="https://www.max.com">
+        <span class="emoji" style="font-size:80px">🅷🅱</span>
+        <span>HBO Max</span>
+        <button onclick="toggleInstall(this)">Install</button>
+      </div>
+      <div class="app-store-card" data-id="prime" data-url="https://www.primevideo.com">
+        <span class="emoji" style="font-size:80px">📺</span>
+        <span>Prime Video</span>
+        <button onclick="toggleInstall(this)">Install</button>
+      </div>
+      <div class="app-store-card" data-id="paramount" data-url="https://www.paramountplus.com">
+        <span class="emoji" style="font-size:80px">🏔️</span>
+        <span>Paramount+</span>
+        <button onclick="toggleInstall(this)">Install</button>
+      </div>
+      <div class="app-store-card" data-id="hulu" data-url="https://www.hulu.com">
+        <span class="emoji" style="font-size:80px">🌿</span>
+        <span>Hulu</span>
+        <button onclick="toggleInstall(this)">Install</button>
+      </div>
+      <div class="app-store-card" data-id="appletv" data-url="https://tv.apple.com">
+        <span class="emoji" style="font-size:80px">🍎</span>
+        <span>Apple TV+</span>
+        <button onclick="toggleInstall(this)">Install</button>
+      </div>
+      <div class="app-store-card" data-id="tubi" data-url="https://tubitv.com">
+        <span class="emoji" style="font-size:80px">📺</span>
+        <span>Tubi</span>
+        <button onclick="toggleInstall(this)">Install</button>
+      </div>
+      <div class="app-store-card" data-id="pluto" data-url="https://pluto.tv">
+        <span class="emoji" style="font-size:80px">🪐</span>
+        <span>Pluto TV</span>
+        <button onclick="toggleInstall(this)">Install</button>
+      </div>
+      <div class="app-store-card" data-id="crackle" data-url="https://www.crackle.com">
+        <span class="emoji" style="font-size:80px">🔥</span>
+        <span>Crackle</span>
+        <button onclick="toggleInstall(this)">Install</button>
+      </div>
+      <div class="app-store-card" data-id="vudu" data-url="https://www.vudu.com">
+        <span class="emoji" style="font-size:80px">🎬</span>
+        <span>Vudu</span>
+        <button onclick="toggleInstall(this)">Install</button>
+      </div>
+      <div class="app-store-card" data-id="kanopy" data-url="https://www.kanopy.com">
+        <span class="emoji" style="font-size:80px">📚</span>
+        <span>Kanopy</span>
+        <button onclick="toggleInstall(this)">Install</button>
+      </div>
+      <div class="app-store-card" data-id="plex" data-url="https://www.plex.tv">
+        <span class="emoji" style="font-size:80px">▶️</span>
+        <span>Plex</span>
+        <button onclick="toggleInstall(this)">Install</button>
+      </div>
+      <div class="app-store-card" data-id="fandango" data-url="https://www.fandango.com">
+        <span class="emoji" style="font-size:80px">🎟️</span>
+        <span>Fandango</span>
+        <button onclick="toggleInstall(this)">Install</button>
+      </div>
+      <div class="app-store-card" data-id="sling" data-url="https://www.sling.com">
+        <span class="emoji" style="font-size:80px">📡</span>
+        <span>Sling TV</span>
+        <button onclick="toggleInstall(this)">Install</button>
+      </div>
+      <div class="app-store-card" data-id="fubo" data-url="https://www.fubo.tv">
+        <span class="emoji" style="font-size:80px">⚽</span>
+        <span>FuboTV</span>
+        <button onclick="toggleInstall(this)">Install</button>
+      </div>
+      <div class="app-store-card" data-id="discovery" data-url="https://www.discoveryplus.com">
+        <span class="emoji" style="font-size:80px">🔍</span>
+        <span>Discovery+</span>
+        <button onclick="toggleInstall(this)">Install</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let audioCtx, pressTimer, isEditing = false;
+let installedApps = JSON.parse(localStorage.getItem('installedApps') || '[]');
+
+function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+function playPulse() {
+  if(!audioCtx || isEditing) return;
+  let osc = audioCtx.createOscillator();
+  let gain = audioCtx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.1);
+  gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+}
+function enableDrag(containerId) {
+    const container = document.getElementById(containerId);
+    let dragItem = null;
+    container.addEventListener('dragstart', (e) => { if(!isEditing) return; dragItem = e.target; e.target.classList.add('dragging'); });
+    container.addEventListener('dragend', (e) => { e.target.classList.remove('dragging'); });
+    container.addEventListener('dragover', (e) => {
+        if(!isEditing) return; e.preventDefault();
+        const afterElement = getDragAfterElement(container, e.clientX);
+        if (afterElement == null) container.appendChild(dragItem);
+        else container.insertBefore(dragItem, afterElement);
+    });
+}
+function getDragAfterElement(container, x) {
+    const draggableElements = [...container.querySelectorAll('[draggable="true"]:not(.dragging)')];
+    return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = x - box.left - box.width / 2;
+        if (offset < 0 && offset > closest.offset) return { offset: offset, element: child };
+        else return closest;
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+function startPress() { pressTimer = setTimeout(openEditor, 1000); }
+function endPress() { clearTimeout(pressTimer); }
+function openEditor() {
+    isEditing = true;
+    document.getElementById('homeScreen').classList.add('editing');
+    document.getElementById('editUI').style.display = 'flex';
+    document.querySelectorAll('.widget, .app-tile').forEach(el => el.setAttribute('draggable', 'true'));
+    enableDrag('widgetGrid'); enableDrag('appGrid');
+}
+function closeEditor() {
+    isEditing = false;
+    document.getElementById('homeScreen').classList.remove('editing');
+    document.getElementById('editUI').style.display = 'none';
+    document.querySelectorAll('.widget, .app-tile').forEach(el => el.setAttribute('draggable', 'false'));
+}
+async function fetchWeather() {
+    const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=40.43&longitude=-74.4&current_weather=true&daily=sunrise,sunset,uv_index_max&hourly=relativehumidity_2m&timezone=auto');
+    const data = await res.json();
+    document.getElementById('wTemp').innerText = Math.round(data.current_weather.temperature) + '°';
+    document.getElementById('wWind').innerText = data.current_weather.windspeed + ' km/h';
+    document.getElementById('wRise').innerText = data.daily.sunrise[0].split('T')[1];
+    document.getElementById('wSet').innerText = data.daily.sunset[0].split('T')[1];
+    document.getElementById('wHum').innerText = data.hourly.relativehumidity_2m[0] + '%';
+    document.getElementById('wUV').innerText = data.daily.uv_index_max[0];
+    document.getElementById('wDir').innerText = data.current_weather.winddirection + '°';
+}
+async function fetchMovies() {
+    const res = await fetch('https://api.themoviedb.org/3/trending/movie/week?api_key=04c35731a5ee918f014970082a0088b1');
+    const data = await res.json();
+    let i = 0;
+    const updateMovie = () => {
+        const m = data.results[i];
+        const img = document.getElementById('moviePoster');
+        img.style.opacity = 0;
+        setTimeout(() => {
+            img.src = 'https://image.tmdb.org/t/p/w500' + m.backdrop_path;
+            document.getElementById('movieTitle').innerText = m.title;
+            img.style.opacity = 1;
+        }, 400);
+        i = (i + 1) % data.results.length;
+    };
+    updateMovie();
+    setInterval(updateMovie, 5000);
+}
+function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').innerText = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    document.getElementById('date-sub').innerText = now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'}).toUpperCase();
+}
+function setAccent(c) { document.documentElement.style.setProperty('--accent', c); }
+function openSettings() { document.getElementById('settingsOverlay').style.display='flex'; }
+function openAppStore() {
+  document.getElementById('appStoreOverlay').style.display='flex';
+  renderInstalledApps();
+}
+function toggleInstall(btn) {
+  const card = btn.parentElement;
+  const appId = card.dataset.id;
+  const appUrl = card.dataset.url;
+  const appName = card.querySelector('span:not(.emoji)').innerText;
+
+  if (card.classList.contains('installed')) {
+    card.classList.remove('installed');
+    btn.textContent = 'Install';
+    installedApps = installedApps.filter(a => a.id !== appId);
+  } else {
+    card.classList.add('installed');
+    btn.textContent = 'Uninstall';
+    installedApps.push({id:appId, name:appName, url:appUrl});
+  }
+  localStorage.setItem('installedApps', JSON.stringify(installedApps));
+  renderInstalledApps();
+}
+function renderInstalledApps() {
+  const row = document.getElementById('installedAppsRow');
+  row.innerHTML = '';
+  installedApps.forEach(app => {
+    const tile = document.createElement('div');
+    tile.className = 'app-tile';
+    tile.innerHTML = `<span>${app.name}</span>`;
+    tile.onclick = () => window.open(app.url, '_blank');
+    row.appendChild(tile);
+  });
+}
+setInterval(updateClock, 1000);
+updateClock(); fetchWeather(); fetchMovies(); renderInstalledApps();
+</script>
+</body>
+</html>
